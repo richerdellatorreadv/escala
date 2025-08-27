@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerador de Escala de Plantão v5.2</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+
+        :root {
+            --primary-color: #4f46e5; --primary-hover: #4338ca; --secondary-color: #f3f4f6; --background-color: #f9fafb;
+            --text-color: #1f2937; --light-text-color: #6b7280; --border-color: #d1d5db;
+            --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            --success-color: #10b981; --danger-color: #ef4444; --warning-color: #f59e0b;
+            --weekend-bg: #f9fafb; --shift-bg: #e0e7ff; --today-border: 2px solid var(--primary-color);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html { scroll-behavior: smooth; }
+
+        body {
+            font-family: 'Poppins', sans-serif; background-color: var(--background-color); color: var(--text-color);
+            line-height: 1.6; display: flex; justify-content: center; padding: 2rem; min-height: 100vh;
+        }
+
+        .container { display: grid; grid-template-columns: 400px 1fr; gap: 2.5rem; width: 100%; max-width: 1600px; }
+        .card { background: #fff; padding: 2rem; border-radius: 16px; box-shadow: var(--card-shadow); }
+
+        /* Controles */
+        .controls { display: flex; flex-direction: column; gap: 1.8rem; }
+        .control-section { display: flex; flex-direction: column; gap: 1rem; }
+        h1 { font-size: 1.8rem; color: var(--primary-color); text-align: center; font-weight: 700; }
+        h2 { font-size: 1.25rem; color: var(--text-color); border-bottom: 2px solid var(--secondary-color); padding-bottom: 0.5rem; font-weight: 600; }
+        label { font-weight: 500; font-size: 0.9rem; color: var(--light-text-color); display: block; margin-bottom: 0.25rem;}
+        input[type="text"], input[type="number"], select {
+            width: 100%; padding: 0.8rem; border: 1px solid var(--border-color); border-radius: 8px; font-size: 1rem;
+            font-family: 'Poppins', sans-serif; transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+        input:focus, select:focus { outline: none; border-color: var(--primary-color); box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.2); }
+        .input-group { display: flex; gap: 0.5rem; }
+        
+        button {
+            padding: 0.8rem 1.5rem; border: none; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer;
+            transition: all 0.2s ease; display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
+        }
+        .btn-primary { background-color: var(--primary-color); color: #fff; }
+        .btn-primary:hover { background-color: var(--primary-hover); transform: translateY(-2px); }
+        .btn-secondary { background-color: var(--secondary-color); color: var(--text-color); border: 1px solid var(--border-color); }
+        .btn-secondary:hover { background-color: #e5e7eb; }
+
+        /* Lista de Plantonistas */
+        #personnel-list { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.5rem; }
+        .person-tag {
+            background-color: var(--secondary-color); padding: 0.5rem 1rem; border-radius: 8px;
+            display: flex; align-items: center; gap: 0.75rem; transition: all 0.2s;
+        }
+        .person-tag.unavailable { opacity: 0.6; background-color: #fee2e2; }
+        .person-tag.unavailable .person-name { text-decoration: line-through; }
+        .person-tag.dragging { opacity: 0.5; cursor: grabbing; }
+        .person-drag-handle { cursor: grab; color: var(--light-text-color); }
+        .person-name { flex-grow: 1; cursor: text; font-weight: 500; }
+        .person-actions { display: flex; align-items: center; }
+        .person-actions button { background: none; padding: 0.2rem; width: 30px; height: 30px; color: var(--light-text-color); }
+        .person-actions button:hover { color: var(--text-color); background-color: #d1d5db; }
+        .unavailable-checkbox { margin-left: auto; accent-color: var(--primary-color); }
+        
+        /* Calendário */
+        .calendar-container { display: flex; flex-direction: column; }
+        #calendar-header { text-align: center; font-size: 1.8rem; font-weight: 600; margin-bottom: 1.5rem; }
+        .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; }
+        .calendar-day {
+            background-color: #fff; border: 1px solid var(--border-color); border-radius: 8px; padding: 0.8rem;
+            min-height: 120px; display: flex; flex-direction: column; transition: all 0.2s ease;
+        }
+        .calendar-day.droppable .day-content { border: 2px dashed var(--primary-color); border-radius: 6px; background-color: #f0f8ff; }
+        .day-header { font-weight: 600; text-align: center; padding-bottom: 0.5rem; color: var(--light-text-color); font-size: 0.9rem; }
+        .day-content { flex-grow: 1; min-height: 50px; }
+        .shift-assignment { background-color: var(--shift-bg); color: var(--primary-color); padding: 0.5rem; border-radius: 6px; text-align: center; font-weight: 600; }
+        
+        /* Modal */
+        .modal-backdrop {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex;
+            align-items: center; justify-content: center; z-index: 1000; opacity: 0; visibility: hidden; transition: all 0.3s ease;
+        }
+        .modal-backdrop.visible { opacity: 1; visibility: visible; }
+        .modal-content { background: #fff; padding: 2rem; border-radius: 16px; width: 90%; max-width: 500px; transform: scale(0.95); transition: transform 0.3s ease; }
+        .modal-backdrop.visible .modal-content { transform: scale(1); }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+        .weekdays { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; }
+        .weekdays input[type="checkbox"] { display: none; }
+        .weekdays label { display: block; text-align: center; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 8px; cursor: pointer; transition: all 0.2s; flex: 1; }
+        .weekdays input:checked + label { background: var(--primary-color); color: #fff; border-color: var(--primary-color); }
+        
+        @media print {
+            body * { visibility: hidden; }
+            .calendar-container, .calendar-container * { visibility: visible; }
+            .calendar-container { position: absolute; left: 0; top: 0; width: 100%; margin: 0; padding: 20px; border: none; box-shadow: none; }
+            body { background-color: #fff; }
+            .shift-assignment { background-color: #f0f0f0 !important; color: #000 !important; border: 1px solid #ddd; }
+        }
+        @media (max-width: 1200px) { .container { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- PAINEL DE CONTROLES -->
+        <div class="card controls">
+            <h1>Gerador de Escala</h1>
+            <div class="control-section">
+                <h2>1. Banco de Plantonistas</h2>
+                <div class="input-group">
+                    <input type="text" id="person-input" placeholder="Novo Plantonista">
+                    <button id="add-person-btn" class="btn-primary" style="padding: 0.5rem 1rem;">+</button>
+                </div>
+                <div id="personnel-list"></div>
+                <div class="input-group">
+                    <button id="import-btn" class="btn-secondary">Importar</button>
+                    <button id="export-btn" class="btn-secondary">Exportar</button>
+                </div>
+            </div>
+            <div class="control-section">
+                <h2>2. Configurações da Escala</h2>
+                <label for="month-select">Mês e Ano:</label>
+                <div class="input-group">
+                    <select id="month-select"></select>
+                    <input type="number" id="year-input">
+                </div>
+                
+                <label for="next-to-start-select">Próximo a Iniciar a Escala:</label>
+                <select id="next-to-start-select"></select>
+
+                <label for="skip-dates-input">Pular dias (feriados):</label>
+                <input type="text" id="skip-dates-input" placeholder="Ex: 25/12, 01/01">
+            </div>
+            <button id="generate-btn" class="btn-primary">Gerar / Refazer Escala</button>
+        </div>
+        <!-- CALENDÁRIO -->
+        <div class="card calendar-container">
+            <div id="calendar-header"></div>
+            <div class="calendar-grid">
+                <div class="day-header">Dom</div><div class="day-header">Seg</div><div class="day-header">Ter</div>
+                <div class="day-header">Qua</div><div class="day-header">Qui</div><div class="day-header">Sex</div><div class="day-header">Sáb</div>
+            </div>
+            <div id="calendar-body" class="calendar-grid"></div>
+            <div class="calendar-footer"><button id="print-btn" class="btn-secondary">Imprimir</button></div>
+        </div>
+    </div>
+    <!-- MODAL DE PREFERÊNCIAS -->
+    <div id="preferences-modal" class="modal-backdrop">
+        <div class="modal-content">
+            <div class="modal-header"><h3 id="modal-title">Preferências</h3><button class="close-modal">&times;</button></div>
+            <div class="modal-body">
+                <label>Dias da semana preferenciais:</label>
+                <div class="weekdays">
+                    <div><input type="checkbox" id="pref-mon" value="1"><label for="pref-mon">Seg</label></div>
+                    <div><input type="checkbox" id="pref-tue" value="2"><label for="pref-tue">Ter</label></div>
+                    <div><input type="checkbox" id="pref-wed" value="3"><label for="pref-wed">Qua</label></div>
+                    <div><input type="checkbox" id="pref-thu" value="4"><label for="pref-thu">Qui</label></div>
+                </div>
+                <label for="unavailable-dates">Datas ou intervalos indisponíveis:</label>
+                <input type="text" id="unavailable-dates" placeholder="Ex: 15/12, 20/12-25/12">
+            </div>
+            <div class="modal-footer"><button id="save-preferences-btn" class="btn-primary">Salvar</button></div>
+        </div>
+    </div>
+    <input type="file" id="import-file-input" accept=".json" style="display: none;">
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        let personnel = [];
+        let currentAssignments = {};
+        let lastOnShiftId = null;
+
+        const allDOM = {
+            personInput: document.getElementById('person-input'), addPersonBtn: document.getElementById('add-person-btn'),
+            personnelList: document.getElementById('personnel-list'), generateBtn: document.getElementById('generate-btn'),
+            calendarBody: document.getElementById('calendar-body'), calendarHeader: document.getElementById('calendar-header'),
+            monthSelect: document.getElementById('month-select'), yearInput: document.getElementById('year-input'),
+            skipDatesInput: document.getElementById('skip-dates-input'), importBtn: document.getElementById('import-btn'),
+            exportBtn: document.getElementById('export-btn'), importFileInput: document.getElementById('import-file-input'),
+            printBtn: document.getElementById('print-btn'),
+            nextToStartSelect: document.getElementById('next-to-start-select'),
+            modal: document.getElementById('preferences-modal'), modalTitle: document.getElementById('modal-title'),
+            unavailableDatesInput: document.getElementById('unavailable-dates'), savePreferencesBtn: document.getElementById('save-preferences-btn'),
+            closeModalBtn: document.querySelector('.close-modal')
+        };
+        
+        function updatePersonnelList() {
+            allDOM.personnelList.innerHTML = '';
+            personnel.forEach(p => {
+                const tag = document.createElement('div');
+                tag.className = `person-tag ${p.isUnavailableThisMonth ? 'unavailable' : ''}`;
+                tag.dataset.id = p.id;
+                tag.innerHTML = `
+                    <span class="person-drag-handle" draggable="true">☰</span>
+                    <span class="person-name">${p.name}</span>
+                    <input type="checkbox" class="unavailable-checkbox" title="Marcar como ausente no mês" ${p.isUnavailableThisMonth ? 'checked' : ''}>
+                    <div class="person-actions">
+                        <button class="edit-preferences" title="Preferências">⚙️</button>
+                        <button class="remove-person" title="Remover">🗑️</button>
+                    </div>`;
+                allDOM.personnelList.appendChild(tag);
+            });
+            updateContinuitySelector();
+        }
+
+        function updateContinuitySelector() {
+            const availablePersonnel = personnel.filter(p => !p.isUnavailableThisMonth);
+            allDOM.nextToStartSelect.innerHTML = '';
+
+            if (availablePersonnel.length === 0) {
+                allDOM.nextToStartSelect.add(new Option("Nenhum plantonista disponível", ""));
+                return;
+            }
+
+            availablePersonnel.forEach(p => {
+                allDOM.nextToStartSelect.add(new Option(p.name, p.id));
+            });
+
+            let nextPersonId = availablePersonnel[0].id;
+            if (lastOnShiftId) {
+                const lastIdx = availablePersonnel.findIndex(p => p.id === lastOnShiftId);
+                if (lastIdx > -1) {
+                    nextPersonId = availablePersonnel[(lastIdx + 1) % availablePersonnel.length].id;
+                }
+            }
+            allDOM.nextToStartSelect.value = nextPersonId;
+        }
+
+        function addPerson() {
+            const name = allDOM.personInput.value.trim();
+            if (name && !personnel.some(p => p.name === name)) {
+                personnel.push({
+                    id: Date.now(), name, isUnavailableThisMonth: false,
+                    preferences: { preferredDays: [], unavailableDates: "" }
+                });
+                updatePersonnelList();
+            }
+            allDOM.personInput.value = ''; allDOM.personInput.focus();
+        }
+
+        function generateCalendar() {
+            if (personnel.length === 0) return alert('Adicione ao menos um plantonista.');
+            
+            const month = parseInt(allDOM.monthSelect.value), year = parseInt(allDOM.yearInput.value);
+            const availablePersonnel = personnel.filter(p => !p.isUnavailableThisMonth);
+            
+            if (availablePersonnel.length === 0) {
+                renderCalendarGrid();
+                return alert('Todos os plantonistas estão marcados como ausentes.');
+            }
+
+            let personQueue = [...availablePersonnel];
+            const selectedStartId = parseInt(allDOM.nextToStartSelect.value);
+            if (selectedStartId) {
+                const startIdx = personQueue.findIndex(p => p.id === selectedStartId);
+                if (startIdx > -1) {
+                    personQueue = [...personQueue.slice(startIdx), ...personQueue.slice(0, startIdx)];
+                }
+            }
+            
+            currentAssignments = {};
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            let lastAssignedPersonInLoop = null;
+
+            const shiftDays = [];
+            for (let day = 1; day <= daysInMonth; day++) {
+                const date = new Date(year, month, day);
+                const dayOfWeek = date.getDay();
+                if (dayOfWeek >= 1 && dayOfWeek <= 4) {
+                    shiftDays.push(day);
+                }
+            }
+
+            shiftDays.forEach(day => {
+                const unavailablePeople = new Set(parseUnavailableDates(month, day));
+                let assigned = false;
+                for (let i = 0; i < personQueue.length && !assigned; i++) {
+                    const candidate = personQueue[0];
+                    if (!unavailablePeople.has(candidate.id)) {
+                        currentAssignments[day] = candidate.id;
+                        lastAssignedPersonInLoop = candidate;
+                        assigned = true;
+                    }
+                    personQueue.push(personQueue.shift());
+                }
+                if (!assigned) currentAssignments[day] = null;
+            });
+            
+            if (lastAssignedPersonInLoop) lastOnShiftId = lastAssignedPersonInLoop.id;
+            renderCalendarGrid();
+            updateContinuitySelector();
+        }
+
+        function parseUnavailableDates(month, day) {
+            const unavailableIds = new Set();
+            personnel.forEach(p => {
+                const rawDates = p.preferences.unavailableDates || "";
+                const dateParts = rawDates.split(',').map(d => d.trim()).filter(Boolean);
+                for (const part of dateParts) {
+                    if (part.includes('-')) {
+                        const [start, end] = part.split('-');
+                        const [startDay, startMonth] = start.split('/').map(Number);
+                        const [endDay, endMonth] = end.split('/').map(Number);
+                        if(month + 1 >= startMonth && month + 1 <= endMonth && day >= startDay && day <= endDay) {
+                            unavailableIds.add(p.id); break;
+                        }
+                    } else {
+                        const [singleDay, singleMonth] = part.split('/').map(Number);
+                        if (singleDay === day && singleMonth === month + 1) {
+                           unavailableIds.add(p.id); break;
+                        }
+                    }
+                }
+            });
+            return unavailableIds;
+        }
+
+        function renderCalendarGrid() {
+            allDOM.calendarBody.innerHTML = '';
+            const month = parseInt(allDOM.monthSelect.value), year = parseInt(allDOM.yearInput.value);
+            allDOM.calendarHeader.textContent = `${allDOM.monthSelect.options[month].text} de ${year}`;
+            const firstDayOfMonth = new Date(year, month, 1).getDay();
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            
+            for (let i = 0; i < 42; i++) {
+                const dayCell = document.createElement('div');
+                dayCell.className = 'calendar-day';
+                const day = i - firstDayOfMonth + 1;
+                if (day > 0 && day <= daysInMonth) {
+                    dayCell.dataset.day = day;
+                    let contentHTML = `<div class="day-number">${day}</div><div class="day-content">`;
+                    const personId = currentAssignments[day];
+                    if (personId) {
+                        const person = personnel.find(p => p.id === personId);
+                        contentHTML += `<div class="shift-assignment">${person ? person.name : 'VAGO'}</div>`;
+                    }
+                    contentHTML += '</div>';
+                    dayCell.innerHTML = contentHTML;
+                } else {
+                    dayCell.classList.add('other-month');
+                }
+                allDOM.calendarBody.appendChild(dayCell);
+            }
+        }
+        
+        function exportPersonnel() {
+            if (personnel.length === 0) return alert('Nenhum plantonista para exportar.');
+            const dataToExport = { personnel, lastOnShiftId };
+            const data = JSON.stringify(dataToExport, null, 2);
+            const blob = new Blob([data], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = 'dados_escala.json'; a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function importPersonnel(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    personnel = data.personnel || [];
+                    lastOnShiftId = data.lastOnShiftId || null;
+                    updatePersonnelList();
+                    alert(`${personnel.length} plantonistas importados.`);
+                } catch (error) { alert('Erro ao ler o arquivo.'); }
+            };
+            reader.readAsText(file);
+            event.target.value = null;
+        }
+        
+        function setupEventListeners() {
+            allDOM.addPersonBtn.addEventListener('click', addPerson);
+            allDOM.personInput.addEventListener('keydown', e => e.key === 'Enter' && addPerson());
+            
+            allDOM.personnelList.addEventListener('click', e => {
+                const personTag = e.target.closest('.person-tag');
+                if (!personTag) return;
+                const id = parseInt(personTag.dataset.id);
+
+                if (e.target.classList.contains('remove-person')) {
+                    personnel = personnel.filter(p => p.id !== id); updatePersonnelList();
+                } else if (e.target.classList.contains('edit-preferences')) {
+                    openPreferencesModal(id);
+                } else if (e.target.classList.contains('unavailable-checkbox')) {
+                    const person = personnel.find(p => p.id === id);
+                    person.isUnavailableThisMonth = e.target.checked; updatePersonnelList();
+                }
+            });
+
+            allDOM.personnelList.addEventListener('dragstart', e => {
+                if (e.target.classList.contains('person-drag-handle')) {
+                    const personTag = e.target.closest('.person-tag');
+                    e.dataTransfer.setData('text/plain', personTag.dataset.id);
+                    personTag.classList.add('dragging');
+                } else { e.preventDefault(); }
+            });
+            allDOM.personnelList.addEventListener('dragend', e => e.target.closest('.person-tag')?.classList.remove('dragging'));
+
+            allDOM.calendarBody.addEventListener('dragover', e => {
+                const dayCell = e.target.closest('.calendar-day[data-day]');
+                if (!dayCell) return;
+                const day = parseInt(dayCell.dataset.day), month = parseInt(allDOM.monthSelect.value), year = parseInt(allDOM.yearInput.value);
+                const dayOfWeek = new Date(year, month, day).getDay();
+                if (dayOfWeek >= 1 && dayOfWeek <= 4) { e.preventDefault(); dayCell.classList.add('droppable'); }
+            });
+            allDOM.calendarBody.addEventListener('dragleave', e => e.target.closest('.calendar-day')?.classList.remove('droppable'));
+            allDOM.calendarBody.addEventListener('drop', e => {
+                e.preventDefault();
+                const dayCell = e.target.closest('.calendar-day[data-day]');
+                if (dayCell) {
+                    dayCell.classList.remove('droppable');
+                    const personId = parseInt(e.dataTransfer.getData('text/plain'));
+                    currentAssignments[parseInt(dayCell.dataset.day)] = personId;
+                    renderCalendarGrid();
+                }
+            });
+
+            allDOM.generateBtn.addEventListener('click', generateCalendar);
+            allDOM.printBtn.addEventListener('click', () => window.print());
+            allDOM.importBtn.addEventListener('click', () => allDOM.importFileInput.click());
+            allDOM.exportBtn.addEventListener('click', exportPersonnel);
+            allDOM.importFileInput.addEventListener('change', importPersonnel);
+            allDOM.savePreferencesBtn.addEventListener('click', savePreferences);
+            allDOM.closeModalBtn.addEventListener('click', closePreferencesModal);
+            allDOM.modal.addEventListener('click', e => e.target === allDOM.modal && closePreferencesModal());
+            allDOM.monthSelect.addEventListener('change', () => { currentAssignments = {}; renderCalendarGrid(); });
+            allDOM.yearInput.addEventListener('change', () => { currentAssignments = {}; renderCalendarGrid(); });
+        }
+
+        function openPreferencesModal(id) {
+            const person = personnel.find(p => p.id === id);
+            if (!person) return;
+            allDOM.modal.dataset.personId = id;
+            allDOM.modalTitle.textContent = `Preferências de ${person.name}`;
+            allDOM.modal.querySelectorAll('.weekdays input').forEach(cb => cb.checked = person.preferences.preferredDays.includes(parseInt(cb.value)));
+            allDOM.unavailableDatesInput.value = person.preferences.unavailableDates;
+            allDOM.modal.classList.add('visible');
+        }
+        function closePreferencesModal() { allDOM.modal.classList.remove('visible'); }
+        function savePreferences() {
+            const id = parseInt(allDOM.modal.dataset.personId);
+            const person = personnel.find(p => p.id === id);
+            if (person) {
+                person.preferences.preferredDays = Array.from(allDOM.modal.querySelectorAll('.weekdays input:checked')).map(cb => parseInt(cb.value));
+                person.preferences.unavailableDates = allDOM.unavailableDatesInput.value;
+            }
+            closePreferencesModal();
+        }
+
+        function initialize() {
+            const today = new Date();
+            const months = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+            months.forEach((month, index) => allDOM.monthSelect.add(new Option(month, index)));
+            allDOM.monthSelect.value = today.getMonth();
+            allDOM.yearInput.value = today.getFullYear();
+            renderCalendarGrid();
+            setupEventListeners();
+            updateContinuitySelector();
+        }
+
+        initialize();
+    });
+    </script>
+</body>
+</html>
