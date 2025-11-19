@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gerador de Escala de Plantão v5.2</title>
+    <title>Gerador de Escala de Plantão v6.1</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
 
@@ -37,7 +37,7 @@
             font-family: 'Poppins', sans-serif; transition: border-color 0.2s ease, box-shadow 0.2s ease;
         }
         input:focus, select:focus { outline: none; border-color: var(--primary-color); box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.2); }
-        .input-group { display: flex; gap: 0.5rem; }
+        .input-group { display: flex; gap: 0.5rem; align-items: center; }
         
         button {
             padding: 0.8rem 1.5rem; border: none; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer;
@@ -47,6 +47,7 @@
         .btn-primary:hover { background-color: var(--primary-hover); transform: translateY(-2px); }
         .btn-secondary { background-color: var(--secondary-color); color: var(--text-color); border: 1px solid var(--border-color); }
         .btn-secondary:hover { background-color: #e5e7eb; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
 
         /* Lista de Plantonistas */
         #personnel-list { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.5rem; }
@@ -66,16 +67,19 @@
         
         /* Calendário */
         .calendar-container { display: flex; flex-direction: column; }
-        #calendar-header { text-align: center; font-size: 1.8rem; font-weight: 600; margin-bottom: 1.5rem; }
+        .calendar-header-controls { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+        #calendar-header { text-align: center; font-size: 1.8rem; font-weight: 600; }
         .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; }
         .calendar-day {
             background-color: #fff; border: 1px solid var(--border-color); border-radius: 8px; padding: 0.8rem;
-            min-height: 120px; display: flex; flex-direction: column; transition: all 0.2s ease;
+            min-height: 120px; display: flex; flex-direction: column; transition: all 0.2s ease; position: relative;
         }
-        .calendar-day.droppable .day-content { border: 2px dashed var(--primary-color); border-radius: 6px; background-color: #f0f8ff; }
+        .calendar-day.droppable .day-content { border: 2px dashed var(--primary-color); border-radius: 6px; background-color: #eff6ff; }
         .day-header { font-weight: 600; text-align: center; padding-bottom: 0.5rem; color: var(--light-text-color); font-size: 0.9rem; }
-        .day-content { flex-grow: 1; min-height: 50px; }
+        .day-number { font-weight: 600; margin-bottom: 0.5rem; }
+        .day-content { flex-grow: 1; min-height: 50px; cursor: pointer; }
         .shift-assignment { background-color: var(--shift-bg); color: var(--primary-color); padding: 0.5rem; border-radius: 6px; text-align: center; font-weight: 600; }
+        .shift-assignment.conflict { box-shadow: 0 0 0 2px var(--danger-color); }
         
         /* Modal */
         .modal-backdrop {
@@ -86,10 +90,30 @@
         .modal-content { background: #fff; padding: 2rem; border-radius: 16px; width: 90%; max-width: 500px; transform: scale(0.95); transition: transform 0.3s ease; }
         .modal-backdrop.visible .modal-content { transform: scale(1); }
         .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
-        .weekdays { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; }
-        .weekdays input[type="checkbox"] { display: none; }
-        .weekdays label { display: block; text-align: center; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 8px; cursor: pointer; transition: all 0.2s; flex: 1; }
-        .weekdays input:checked + label { background: var(--primary-color); color: #fff; border-color: var(--primary-color); }
+        .modal-footer { margin-top: 1.5rem; text-align: right; }
+        .close-modal { background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--light-text-color); }
+        
+        /* Modal Holiday Picker */
+        #holiday-picker-calendar { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; text-align: center; }
+        #holiday-picker-calendar div { padding: 0.5rem; border-radius: 50%; cursor: pointer; transition: background-color 0.2s; }
+        #holiday-picker-calendar div.day-name { font-weight: bold; cursor: default; }
+        #holiday-picker-calendar div.day-cell:hover { background-color: var(--secondary-color); }
+        #holiday-picker-calendar div.selected { background-color: var(--primary-color); color: #fff; }
+        
+        /* Toast Notifications */
+        #toast-container { position: fixed; bottom: 20px; right: 20px; z-index: 2000; display: flex; flex-direction: column; gap: 10px; }
+        .toast { padding: 1rem 1.5rem; border-radius: 8px; color: #fff; box-shadow: var(--card-shadow); opacity: 0; transform: translateX(100%); animation: slideIn 0.5s forwards; }
+        .toast.success { background-color: var(--success-color); }
+        .toast.error { background-color: var(--danger-color); }
+        .toast.info { background-color: var(--primary-color); }
+        @keyframes slideIn { to { opacity: 1; transform: translateX(0); } }
+
+        /* Context Menu */
+        #context-menu { position: absolute; z-index: 1001; background: #fff; border-radius: 8px; box-shadow: var(--card-shadow); padding: 0.5rem 0; min-width: 180px; display: none; }
+        #context-menu ul { list-style: none; padding: 0; margin: 0; }
+        #context-menu li { padding: 0.75rem 1rem; cursor: pointer; }
+        #context-menu li:hover { background-color: var(--secondary-color); }
+        #context-menu .separator { border-top: 1px solid var(--border-color); margin: 0.5rem 0; }
         
         @media print {
             body * { visibility: hidden; }
@@ -114,8 +138,8 @@
                 </div>
                 <div id="personnel-list"></div>
                 <div class="input-group">
-                    <button id="import-btn" class="btn-secondary">Importar</button>
-                    <button id="export-btn" class="btn-secondary">Exportar</button>
+                    <button id="import-btn" class="btn-secondary">Importar JSON</button>
+                    <button id="export-btn" class="btn-secondary">Exportar JSON</button>
                 </div>
             </div>
             <div class="control-section">
@@ -130,46 +154,81 @@
                 <select id="next-to-start-select"></select>
 
                 <label for="skip-dates-input">Pular dias (feriados):</label>
-                <input type="text" id="skip-dates-input" placeholder="Ex: 25, 1, 15">
+                <div class="input-group">
+                     <input type="text" id="skip-dates-input" placeholder="Clique no 📅 para selecionar" readonly>
+                     <button id="open-holiday-picker" class="btn-secondary" style="padding: 0.5rem 1rem;">📅</button>
+                </div>
             </div>
             <button id="generate-btn" class="btn-primary">Gerar / Refazer Escala</button>
         </div>
         <!-- CALENDÁRIO -->
         <div class="card calendar-container">
-            <div id="calendar-header"></div>
+            <div class="calendar-header-controls">
+                <div class="input-group">
+                    <button id="undo-btn" title="Desfazer (Ctrl+Z)" class="btn-secondary">↶</button>
+                    <button id="redo-btn" title="Refazer (Ctrl+Y)" class="btn-secondary">↷</button>
+                </div>
+                <div id="calendar-header"></div>
+                <div class="input-group">
+                    <button id="export-ics-btn" class="btn-secondary">Exportar .ics</button>
+                    <button id="print-btn" class="btn-secondary">Imprimir</button>
+                </div>
+            </div>
             <div class="calendar-grid">
                 <div class="day-header">Dom</div><div class="day-header">Seg</div><div class="day-header">Ter</div>
                 <div class="day-header">Qua</div><div class="day-header">Qui</div><div class="day-header">Sex</div><div class="day-header">Sáb</div>
             </div>
             <div id="calendar-body" class="calendar-grid"></div>
-            <div class="calendar-footer"><button id="print-btn" class="btn-secondary">Imprimir</button></div>
         </div>
     </div>
+
     <!-- MODAL DE PREFERÊNCIAS -->
     <div id="preferences-modal" class="modal-backdrop">
         <div class="modal-content">
             <div class="modal-header"><h3 id="modal-title">Preferências</h3><button class="close-modal">&times;</button></div>
             <div class="modal-body">
-                <label>Dias da semana preferenciais:</label>
+                <label>Dias da semana preferenciais (não implementado na geração automática):</label>
                 <div class="weekdays">
                     <div><input type="checkbox" id="pref-mon" value="1"><label for="pref-mon">Seg</label></div>
                     <div><input type="checkbox" id="pref-tue" value="2"><label for="pref-tue">Ter</label></div>
                     <div><input type="checkbox" id="pref-wed" value="3"><label for="pref-wed">Qua</label></div>
                     <div><input type="checkbox" id="pref-thu" value="4"><label for="pref-thu">Qui</label></div>
                 </div>
-                <label for="unavailable-dates">Datas ou intervalos indisponíveis:</label>
-                <input type="text" id="unavailable-dates" placeholder="Ex: 15/12, 20/12-25/12">
+                <label for="unavailable-dates">Datas ou intervalos indisponíveis (Ex: 15/12, 20/12-25/12):</label>
+                <input type="text" id="unavailable-dates" placeholder="DD/MM, DD/MM-DD/MM">
             </div>
             <div class="modal-footer"><button id="save-preferences-btn" class="btn-primary">Salvar</button></div>
         </div>
     </div>
+
+    <!-- MODAL SELETOR DE FERIADOS -->
+    <div id="holiday-picker-modal" class="modal-backdrop">
+        <div class="modal-content">
+            <div class="modal-header"><h3>Selecionar Feriados/Dias a Pular</h3><button class="close-modal">&times;</button></div>
+            <div class="modal-body">
+                <div id="holiday-picker-calendar"></div>
+            </div>
+            <div class="modal-footer"><button id="save-holidays-btn" class="btn-primary">Salvar</button></div>
+        </div>
+    </div>
+    
+    <!-- MENU DE CONTEXTO -->
+    <div id="context-menu"></div>
+    <!-- CONTAINER DE NOTIFICAÇÕES -->
+    <div id="toast-container"></div>
+    
     <input type="file" id="import-file-input" accept=".json" style="display: none;">
 
     <script>
     document.addEventListener('DOMContentLoaded', function() {
         let personnel = [];
         let currentAssignments = {};
+        let skipDatesSet = new Set();
         let lastOnShiftId = null;
+
+        // --- NOVO: Sistema de Desfazer/Refazer ---
+        let history = [];
+        let historyIndex = -1;
 
         const allDOM = {
             personInput: document.getElementById('person-input'), addPersonBtn: document.getElementById('add-person-btn'),
@@ -178,13 +237,105 @@
             monthSelect: document.getElementById('month-select'), yearInput: document.getElementById('year-input'),
             skipDatesInput: document.getElementById('skip-dates-input'), importBtn: document.getElementById('import-btn'),
             exportBtn: document.getElementById('export-btn'), importFileInput: document.getElementById('import-file-input'),
-            printBtn: document.getElementById('print-btn'),
+            printBtn: document.getElementById('print-btn'), exportIcsBtn: document.getElementById('export-ics-btn'),
             nextToStartSelect: document.getElementById('next-to-start-select'),
-            modal: document.getElementById('preferences-modal'), modalTitle: document.getElementById('modal-title'),
-            unavailableDatesInput: document.getElementById('unavailable-dates'), savePreferencesBtn: document.getElementById('save-preferences-btn'),
-            closeModalBtn: document.querySelector('.close-modal')
+            undoBtn: document.getElementById('undo-btn'), redoBtn: document.getElementById('redo-btn'),
+            toastContainer: document.getElementById('toast-container'), contextMenu: document.getElementById('context-menu'),
+            preferencesModal: {
+                modal: document.getElementById('preferences-modal'), title: document.getElementById('modal-title'),
+                unavailableDatesInput: document.getElementById('unavailable-dates'),
+                saveBtn: document.getElementById('save-preferences-btn'),
+                closeBtns: document.querySelectorAll('#preferences-modal .close-modal')
+            },
+            holidayPickerModal: {
+                modal: document.getElementById('holiday-picker-modal'), openBtn: document.getElementById('open-holiday-picker'),
+                calendar: document.getElementById('holiday-picker-calendar'), saveBtn: document.getElementById('save-holidays-btn'),
+                closeBtns: document.querySelectorAll('#holiday-picker-modal .close-modal')
+            }
         };
         
+        // --- NOVO: Notificações Toast ---
+        function showToast(message, type = 'info') {
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.textContent = message;
+            allDOM.toastContainer.appendChild(toast);
+            setTimeout(() => {
+                toast.style.animation = 'none';
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateX(100%)';
+                setTimeout(() => toast.remove(), 500);
+            }, 3000);
+        }
+
+        // --- NOVO: Sistema de Desfazer/Refazer (Undo/Redo) ---
+        function saveStateToHistory() {
+            const state = {
+                assignments: JSON.parse(JSON.stringify(currentAssignments)),
+                skipDates: Array.from(skipDatesSet)
+            };
+            history = history.slice(0, historyIndex + 1); // Corta o futuro se houver um novo estado
+            history.push(state);
+            historyIndex++;
+            updateUndoRedoButtons();
+        }
+
+        function undo() {
+            if (historyIndex > 0) {
+                historyIndex--;
+                const state = history[historyIndex];
+                currentAssignments = JSON.parse(JSON.stringify(state.assignments));
+                skipDatesSet = new Set(state.skipDates);
+                renderCalendarGrid();
+                updateUndoRedoButtons();
+                showToast("Ação desfeita", "info");
+            }
+        }
+        
+        function redo() {
+            if (historyIndex < history.length - 1) {
+                historyIndex++;
+                const state = history[historyIndex];
+                currentAssignments = JSON.parse(JSON.stringify(state.assignments));
+                skipDatesSet = new Set(state.skipDates);
+                renderCalendarGrid();
+                updateUndoRedoButtons();
+                showToast("Ação refeita", "info");
+            }
+        }
+
+        function updateUndoRedoButtons() {
+            allDOM.undoBtn.disabled = historyIndex <= 0;
+            allDOM.redoBtn.disabled = historyIndex >= history.length - 1;
+        }
+        
+        // --- NOVO: Salvamento no Navegador (LocalStorage) ---
+        function saveDataToLocalStorage() {
+            const appData = {
+                personnel, currentAssignments, lastOnShiftId, skipDates: Array.from(skipDatesSet),
+                selectedMonth: allDOM.monthSelect.value, selectedYear: allDOM.yearInput.value
+            };
+            localStorage.setItem('scheduleGeneratorData', JSON.stringify(appData));
+        }
+
+        function loadDataFromLocalStorage() {
+            const appData = JSON.parse(localStorage.getItem('scheduleGeneratorData'));
+            if (appData) {
+                personnel = appData.personnel || [];
+                currentAssignments = appData.currentAssignments || {};
+                lastOnShiftId = appData.lastOnShiftId || null;
+                skipDatesSet = new Set(appData.skipDates || []);
+                // Valida os dados antes de usar
+                if (appData.selectedMonth !== null && appData.selectedMonth !== undefined) {
+                    allDOM.monthSelect.value = appData.selectedMonth;
+                }
+                if (appData.selectedYear && !isNaN(appData.selectedYear)) {
+                    allDOM.yearInput.value = appData.selectedYear;
+                }
+                showToast("Dados carregados do salvamento automático.", "success");
+            }
+        }
+
         function updatePersonnelList() {
             allDOM.personnelList.innerHTML = '';
             personnel.forEach(p => {
@@ -202,27 +353,20 @@
                 allDOM.personnelList.appendChild(tag);
             });
             updateContinuitySelector();
+            saveDataToLocalStorage();
         }
 
         function updateContinuitySelector() {
             const availablePersonnel = personnel.filter(p => !p.isUnavailableThisMonth);
             allDOM.nextToStartSelect.innerHTML = '';
-
             if (availablePersonnel.length === 0) {
-                allDOM.nextToStartSelect.add(new Option("Nenhum plantonista disponível", ""));
-                return;
+                allDOM.nextToStartSelect.add(new Option("Nenhum plantonista disponível", "")); return;
             }
-
-            availablePersonnel.forEach(p => {
-                allDOM.nextToStartSelect.add(new Option(p.name, p.id));
-            });
-
+            availablePersonnel.forEach(p => allDOM.nextToStartSelect.add(new Option(p.name, p.id)));
             let nextPersonId = availablePersonnel[0].id;
             if (lastOnShiftId) {
                 const lastIdx = availablePersonnel.findIndex(p => p.id === lastOnShiftId);
-                if (lastIdx > -1) {
-                    nextPersonId = availablePersonnel[(lastIdx + 1) % availablePersonnel.length].id;
-                }
+                if (lastIdx > -1) nextPersonId = availablePersonnel[(lastIdx + 1) % availablePersonnel.length].id;
             }
             allDOM.nextToStartSelect.value = nextPersonId;
         }
@@ -235,38 +379,29 @@
                     preferences: { preferredDays: [], unavailableDates: "" }
                 });
                 updatePersonnelList();
+                showToast(`${name} adicionado(a).`, 'success');
             }
             allDOM.personInput.value = ''; allDOM.personInput.focus();
         }
 
          function generateCalendar() {
-            if (personnel.length === 0) return alert('Adicione ao menos um plantonista.');
+            if (personnel.length === 0) {
+                showToast("Adicione ao menos um plantonista.", "error"); return;
+            }
             
             const month = parseInt(allDOM.monthSelect.value), year = parseInt(allDOM.yearInput.value);
-
-            // --- INÍCIO DO CÓDIGO A SER ADICIONADO ---
-            const skipDatesRaw = allDOM.skipDatesInput.value;
-const skipDatesSet = new Set(
-    skipDatesRaw.split(',')
-        .map(d => parseInt(d.trim(), 10)) // Converte cada parte para um número
-        .filter(day => !isNaN(day))       // Remove entradas que não são números válidos
-);
-            // --- FIM DO CÓDIGO A SER ADICIONADO ---
-
             const availablePersonnel = personnel.filter(p => !p.isUnavailableThisMonth);
             
             if (availablePersonnel.length === 0) {
                 renderCalendarGrid();
-                return alert('Todos os plantonistas estão marcados como ausentes.');
+                showToast('Todos os plantonistas estão marcados como ausentes.', 'warning'); return;
             }
 
             let personQueue = [...availablePersonnel];
             const selectedStartId = parseInt(allDOM.nextToStartSelect.value);
             if (selectedStartId) {
                 const startIdx = personQueue.findIndex(p => p.id === selectedStartId);
-                if (startIdx > -1) {
-                    personQueue = [...personQueue.slice(startIdx), ...personQueue.slice(0, startIdx)];
-                }
+                if (startIdx > -1) personQueue = [...personQueue.slice(startIdx), ...personQueue.slice(0, startIdx)];
             }
             
             currentAssignments = {};
@@ -277,22 +412,17 @@ const skipDatesSet = new Set(
             for (let day = 1; day <= daysInMonth; day++) {
                 const date = new Date(year, month, day);
                 const dayOfWeek = date.getDay();
-                
-                // --- SUBSTITUA O BLOCO 'IF' ORIGINAL POR ESTE NOVO BLOCO ---
-                // Formata a data atual no formato "DD/MM" para comparar com a lista de feriados
                 if (dayOfWeek >= 1 && dayOfWeek <= 4 && !skipDatesSet.has(day)) {
-    shiftDays.push(day);
-}
-                // --- FIM DA SUBSTITUIÇÃO ---
-
+                    shiftDays.push(day);
+                }
             }
 
             shiftDays.forEach(day => {
-                const unavailablePeople = new Set(parseUnavailableDates(month, day));
+                const unavailableIds = getUnavailablePeopleForDate(month, day);
                 let assigned = false;
                 for (let i = 0; i < personQueue.length && !assigned; i++) {
                     const candidate = personQueue[0];
-                    if (!unavailablePeople.has(candidate.id)) {
+                    if (!unavailableIds.has(candidate.id)) {
                         currentAssignments[day] = candidate.id;
                         lastAssignedPersonInLoop = candidate;
                         assigned = true;
@@ -303,38 +433,45 @@ const skipDatesSet = new Set(
             });
             
             if (lastAssignedPersonInLoop) lastOnShiftId = lastAssignedPersonInLoop.id;
-            renderCalendarGrid(skipDatesSet);
+            saveStateToHistory();
+            renderCalendarGrid();
             updateContinuitySelector();
+            showToast("Escala gerada com sucesso!", "success");
         }
 
-        function parseUnavailableDates(month, day) {
+        function getUnavailablePeopleForDate(month, day) {
             const unavailableIds = new Set();
             personnel.forEach(p => {
                 const rawDates = p.preferences.unavailableDates || "";
                 const dateParts = rawDates.split(',').map(d => d.trim()).filter(Boolean);
                 for (const part of dateParts) {
-                    if (part.includes('-')) {
-                        const [start, end] = part.split('-');
-                        const [startDay, startMonth] = start.split('/').map(Number);
-                        const [endDay, endMonth] = end.split('/').map(Number);
-                        if(month + 1 >= startMonth && month + 1 <= endMonth && day >= startDay && day <= endDay) {
-                            unavailableIds.add(p.id); break;
+                    try {
+                        if (part.includes('-')) {
+                            const [startStr, endStr] = part.split('-');
+                            const [startDay, startMonth] = startStr.split('/').map(Number);
+                            const [endDay, endMonth] = endStr.split('/').map(Number);
+                            const checkMonth = month + 1;
+                            if (checkMonth >= startMonth && checkMonth <= endMonth && day >= startDay && day <= endDay) {
+                                unavailableIds.add(p.id); break;
+                            }
+                        } else {
+                            const [singleDay, singleMonth] = part.split('/').map(Number);
+                            if (singleDay === day && singleMonth === month + 1) {
+                               unavailableIds.add(p.id); break;
+                            }
                         }
-                    } else {
-                        const [singleDay, singleMonth] = part.split('/').map(Number);
-                        if (singleDay === day && singleMonth === month + 1) {
-                           unavailableIds.add(p.id); break;
-                        }
-                    }
+                    } catch(e) { console.error("Erro ao parsear data de indisponibilidade:", part); }
                 }
             });
             return unavailableIds;
         }
 
-        function renderCalendarGrid(skipDatesSet = new Set()) {
+        function renderCalendarGrid() {
             allDOM.calendarBody.innerHTML = '';
             const month = parseInt(allDOM.monthSelect.value), year = parseInt(allDOM.yearInput.value);
             allDOM.calendarHeader.textContent = `${allDOM.monthSelect.options[month].text} de ${year}`;
+            allDOM.skipDatesInput.value = Array.from(skipDatesSet).sort((a,b)=>a-b).join(', ');
+
             const firstDayOfMonth = new Date(year, month, 1).getDay();
             const daysInMonth = new Date(year, month + 1, 0).getDate();
             
@@ -343,33 +480,30 @@ const skipDatesSet = new Set(
                 dayCell.className = 'calendar-day';
                 const day = i - firstDayOfMonth + 1;
                 if (day > 0 && day <= daysInMonth) {
-    dayCell.dataset.day = day;
-let contentHTML = `<div class="day-number">${day}</div><div class="day-content">`;
-
-// 1. Verifica se o DIA (número) está na lista de feriados
-if (skipDatesSet.has(day)) {
-        contentHTML += `<div class="shift-assignment" style="background-color: var(--secondary-color); color: var(--light-text-color); font-style: italic;">sem expediente</div>`;
-    
-    // 2. Se não for feriado, verifica se há um plantonista
-    } else {
-        const personId = currentAssignments[day];
-        if (personId) {
-            const person = personnel.find(p => p.id === personId);
-            contentHTML += `<div class="shift-assignment">${person ? person.name : 'VAGO'}</div>`;
-        }
-    }
-
-    contentHTML += '</div>';
-    dayCell.innerHTML = contentHTML;
+                    dayCell.dataset.day = day;
+                    let contentHTML = `<div class="day-number">${day}</div><div class="day-content">`;
+                    if (skipDatesSet.has(day)) {
+                        contentHTML += `<div class="shift-assignment" style="background-color: var(--secondary-color); color: var(--light-text-color); font-style: italic;">sem expediente</div>`;
+                    } else {
+                        const personId = currentAssignments[day];
+                        if (personId) {
+                            const person = personnel.find(p => p.id === personId);
+                            const isConflict = getUnavailablePeopleForDate(month, day).has(personId);
+                            contentHTML += `<div class="shift-assignment ${isConflict ? 'conflict' : ''}" title="${isConflict ? 'CONFLITO: Plantonista indisponível nesta data!' : ''}">${person ? person.name : 'VAGO'}</div>`;
+                        }
+                    }
+                    contentHTML += '</div>';
+                    dayCell.innerHTML = contentHTML;
                 } else {
                     dayCell.classList.add('other-month');
                 }
                 allDOM.calendarBody.appendChild(dayCell);
             }
+            saveDataToLocalStorage();
         }
         
         function exportPersonnel() {
-            if (personnel.length === 0) return alert('Nenhum plantonista para exportar.');
+            if (personnel.length === 0) { showToast('Nenhum plantonista para exportar.', 'warning'); return; }
             const dataToExport = { personnel, lastOnShiftId };
             const data = JSON.stringify(dataToExport, null, 2);
             const blob = new Blob([data], { type: 'application/json' });
@@ -377,6 +511,7 @@ if (skipDatesSet.has(day)) {
             const a = document.createElement('a');
             a.href = url; a.download = 'dados_escala.json'; a.click();
             URL.revokeObjectURL(url);
+            showToast('Dados exportados para dados_escala.json', 'success');
         }
 
         function importPersonnel(event) {
@@ -389,13 +524,88 @@ if (skipDatesSet.has(day)) {
                     personnel = data.personnel || [];
                     lastOnShiftId = data.lastOnShiftId || null;
                     updatePersonnelList();
-                    alert(`${personnel.length} plantonistas importados.`);
-                } catch (error) { alert('Erro ao ler o arquivo.'); }
+                    showToast(`${personnel.length} plantonistas importados.`, 'success');
+                } catch (error) { showToast('Erro ao ler o arquivo.', 'error'); }
             };
             reader.readAsText(file);
             event.target.value = null;
         }
+
+        // --- NOVO: Exportação para iCal (.ics) ---
+        function exportToICS() {
+            const month = parseInt(allDOM.monthSelect.value), year = parseInt(allDOM.yearInput.value);
+            let icsString = `BEGIN:VCALENDAR\nVERSION:2.0\nPRODID:-//GeradorDeEscala//PT\n`;
+
+            for (const day in currentAssignments) {
+                const personId = currentAssignments[day];
+                if (personId) {
+                    const person = personnel.find(p => p.id === personId);
+                    if (person) {
+                        const date = new Date(year, month, day);
+                        const startDate = `${year}${String(month + 1).padStart(2, '0')}${String(day).padStart(2, '0')}`;
+                        const endDate = `${year}${String(month + 1).padStart(2, '0')}${String(parseInt(day) + 1).padStart(2, '0')}`;
+                        
+                        icsString += 'BEGIN:VEVENT\n';
+                        icsString += `UID:${startDate}-${person.id}@escala.app\n`;
+                        icsString += `DTSTAMP:${new Date().toISOString().replace(/[-:.]/g, '')}Z\n`;
+                        icsString += `DTSTART;VALUE=DATE:${startDate}\n`;
+                        icsString += `DTEND;VALUE=DATE:${endDate}\n`;
+                        icsString += `SUMMARY:Plantão: ${person.name}\n`;
+                        icsString += 'END:VEVENT\n';
+                    }
+                }
+            }
+            icsString += 'END:VCALENDAR';
+
+            const blob = new Blob([icsString], { type: 'text/calendar' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = `escala_${year}_${month + 1}.ics`; a.click();
+            URL.revokeObjectURL(url);
+            showToast('Arquivo .ics gerado para download.', 'success');
+        }
         
+        // --- NOVO: Lógica do Menu de Contexto ---
+        function showContextMenu(e, day) {
+            e.preventDefault();
+            const availablePersonnel = personnel.filter(p => !p.isUnavailableThisMonth);
+            let menuHTML = '<ul>';
+            availablePersonnel.forEach(p => {
+                menuHTML += `<li data-person-id="${p.id}">${p.name}</li>`;
+            });
+            menuHTML += '<li class="separator"></li>';
+            menuHTML += '<li data-person-id="null">Deixar Vago</li>';
+            menuHTML += '</ul>';
+
+            allDOM.contextMenu.innerHTML = menuHTML;
+            allDOM.contextMenu.style.display = 'block';
+            allDOM.contextMenu.style.left = `${e.pageX}px`;
+            allDOM.contextMenu.style.top = `${e.pageY}px`;
+
+            allDOM.contextMenu.dataset.day = day;
+        }
+
+        function hideContextMenu() {
+            allDOM.contextMenu.style.display = 'none';
+        }
+        
+        // --- NOVO: Lógica do Seletor de Feriados ---
+        function openHolidayPicker() {
+            const month = parseInt(allDOM.monthSelect.value);
+            const year = parseInt(allDOM.yearInput.value);
+            const firstDay = new Date(year, month, 1).getDay();
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+            let calendarHTML = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map(d => `<div class="day-name">${d}</div>`).join('');
+            for (let i = 0; i < firstDay; i++) { calendarHTML += '<div></div>'; }
+            for (let day = 1; day <= daysInMonth; day++) {
+                const isSelected = skipDatesSet.has(day) ? 'selected' : '';
+                calendarHTML += `<div class="day-cell ${isSelected}" data-day="${day}">${day}</div>`;
+            }
+            allDOM.holidayPickerModal.calendar.innerHTML = calendarHTML;
+            allDOM.holidayPickerModal.modal.classList.add('visible');
+        }
+
         function setupEventListeners() {
             allDOM.addPersonBtn.addEventListener('click', addPerson);
             allDOM.personInput.addEventListener('keydown', e => e.key === 'Enter' && addPerson());
@@ -426,10 +636,9 @@ if (skipDatesSet.has(day)) {
 
             allDOM.calendarBody.addEventListener('dragover', e => {
                 const dayCell = e.target.closest('.calendar-day[data-day]');
-                if (!dayCell) return;
-                const day = parseInt(dayCell.dataset.day), month = parseInt(allDOM.monthSelect.value), year = parseInt(allDOM.yearInput.value);
-                const dayOfWeek = new Date(year, month, day).getDay();
-                if (dayOfWeek >= 1 && dayOfWeek <= 4) { e.preventDefault(); dayCell.classList.add('droppable'); }
+                if (dayCell && !skipDatesSet.has(parseInt(dayCell.dataset.day))) { 
+                    e.preventDefault(); dayCell.classList.add('droppable'); 
+                }
             });
             allDOM.calendarBody.addEventListener('dragleave', e => e.target.closest('.calendar-day')?.classList.remove('droppable'));
             allDOM.calendarBody.addEventListener('drop', e => {
@@ -438,39 +647,103 @@ if (skipDatesSet.has(day)) {
                 if (dayCell) {
                     dayCell.classList.remove('droppable');
                     const personId = parseInt(e.dataTransfer.getData('text/plain'));
+                    saveStateToHistory(); // Salva estado ANTES da alteração
                     currentAssignments[parseInt(dayCell.dataset.day)] = personId;
                     renderCalendarGrid();
                 }
             });
+            
+            // NOVO: Event listener para o menu de contexto no calendário
+            allDOM.calendarBody.addEventListener('contextmenu', e => {
+                 const dayCell = e.target.closest('.calendar-day[data-day]');
+                 if(dayCell && !skipDatesSet.has(parseInt(dayCell.dataset.day))){
+                     showContextMenu(e, dayCell.dataset.day);
+                 }
+            });
+            // NOVO: Clique para edição rápida (alternativa ao contextmenu)
+            allDOM.calendarBody.addEventListener('click', e => {
+                 const dayCell = e.target.closest('.calendar-day[data-day]');
+                 if(dayCell && !skipDatesSet.has(parseInt(dayCell.dataset.day))){
+                     showContextMenu(e, dayCell.dataset.day);
+                 }
+            });
+
+            // NOVO: Listener para o menu de contexto
+            allDOM.contextMenu.addEventListener('click', e => {
+                if(e.target.tagName === 'LI') {
+                    const personIdStr = e.target.dataset.personId;
+                    const day = allDOM.contextMenu.dataset.day;
+                    if(day) {
+                        saveStateToHistory(); // Salva estado ANTES da alteração
+                        currentAssignments[day] = personIdStr === 'null' ? null : parseInt(personIdStr);
+                        renderCalendarGrid();
+                    }
+                    hideContextMenu();
+                }
+            });
+            document.addEventListener('click', (e) => {
+                if (!allDOM.contextMenu.contains(e.target) && !e.target.closest('.day-content')) {
+                    hideContextMenu();
+                }
+            });
+
 
             allDOM.generateBtn.addEventListener('click', generateCalendar);
             allDOM.printBtn.addEventListener('click', () => window.print());
+            allDOM.exportIcsBtn.addEventListener('click', exportToICS);
             allDOM.importBtn.addEventListener('click', () => allDOM.importFileInput.click());
             allDOM.exportBtn.addEventListener('click', exportPersonnel);
             allDOM.importFileInput.addEventListener('change', importPersonnel);
-            allDOM.savePreferencesBtn.addEventListener('click', savePreferences);
-            allDOM.closeModalBtn.addEventListener('click', closePreferencesModal);
-            allDOM.modal.addEventListener('click', e => e.target === allDOM.modal && closePreferencesModal());
-            allDOM.monthSelect.addEventListener('change', () => { currentAssignments = {}; renderCalendarGrid(); });
-            allDOM.yearInput.addEventListener('change', () => { currentAssignments = {}; renderCalendarGrid(); });
+            
+            allDOM.preferencesModal.saveBtn.addEventListener('click', savePreferences);
+            allDOM.preferencesModal.closeBtns.forEach(btn => btn.addEventListener('click', closePreferencesModal));
+            allDOM.preferencesModal.modal.addEventListener('click', e => e.target === allDOM.preferencesModal.modal && closePreferencesModal());
+            
+            // NOVO: Listeners para o seletor de feriados
+            allDOM.holidayPickerModal.openBtn.addEventListener('click', openHolidayPicker);
+            allDOM.holidayPickerModal.closeBtns.forEach(btn => btn.addEventListener('click', () => allDOM.holidayPickerModal.modal.classList.remove('visible')));
+            allDOM.holidayPickerModal.calendar.addEventListener('click', e => {
+                if(e.target.classList.contains('day-cell')) e.target.classList.toggle('selected');
+            });
+            allDOM.holidayPickerModal.saveBtn.addEventListener('click', () => {
+                const selectedDays = allDOM.holidayPickerModal.calendar.querySelectorAll('.day-cell.selected');
+                saveStateToHistory();
+                skipDatesSet = new Set(Array.from(selectedDays).map(d => parseInt(d.dataset.day)));
+                renderCalendarGrid();
+                allDOM.holidayPickerModal.modal.classList.remove('visible');
+                showToast("Dias a pular foram atualizados.", "info");
+            });
+
+            // NOVO: Listeners de Undo/Redo e atalhos
+            allDOM.undoBtn.addEventListener('click', undo);
+            allDOM.redoBtn.addEventListener('click', redo);
+            document.addEventListener('keydown', e => {
+                if (e.ctrlKey && e.key === 'z') { e.preventDefault(); undo(); }
+                if (e.ctrlKey && e.key === 'y') { e.preventDefault(); redo(); }
+            });
+            
+            allDOM.monthSelect.addEventListener('change', () => { currentAssignments = {}; saveStateToHistory(); renderCalendarGrid(); });
+            allDOM.yearInput.addEventListener('change', () => { currentAssignments = {}; saveStateToHistory(); renderCalendarGrid(); });
         }
 
         function openPreferencesModal(id) {
             const person = personnel.find(p => p.id === id);
             if (!person) return;
-            allDOM.modal.dataset.personId = id;
-            allDOM.modalTitle.textContent = `Preferências de ${person.name}`;
-            allDOM.modal.querySelectorAll('.weekdays input').forEach(cb => cb.checked = person.preferences.preferredDays.includes(parseInt(cb.value)));
-            allDOM.unavailableDatesInput.value = person.preferences.unavailableDates;
-            allDOM.modal.classList.add('visible');
+            allDOM.preferencesModal.modal.dataset.personId = id;
+            allDOM.preferencesModal.title.textContent = `Preferências de ${person.name}`;
+            allDOM.preferencesModal.modal.querySelectorAll('.weekdays input').forEach(cb => cb.checked = person.preferences.preferredDays.includes(parseInt(cb.value)));
+            allDOM.preferencesModal.unavailableDatesInput.value = person.preferences.unavailableDates;
+            allDOM.preferencesModal.modal.classList.add('visible');
         }
-        function closePreferencesModal() { allDOM.modal.classList.remove('visible'); }
+        function closePreferencesModal() { allDOM.preferencesModal.modal.classList.remove('visible'); }
         function savePreferences() {
-            const id = parseInt(allDOM.modal.dataset.personId);
+            const id = parseInt(allDOM.preferencesModal.modal.dataset.personId);
             const person = personnel.find(p => p.id === id);
             if (person) {
-                person.preferences.preferredDays = Array.from(allDOM.modal.querySelectorAll('.weekdays input:checked')).map(cb => parseInt(cb.value));
-                person.preferences.unavailableDates = allDOM.unavailableDatesInput.value;
+                person.preferences.preferredDays = Array.from(allDOM.preferencesModal.modal.querySelectorAll('.weekdays input:checked')).map(cb => parseInt(cb.value));
+                person.preferences.unavailableDates = allDOM.preferencesModal.unavailableDatesInput.value;
+                showToast(`Preferências de ${person.name} salvas.`, 'success');
+                renderCalendarGrid(); // Re-render para mostrar possíveis novos conflitos
             }
             closePreferencesModal();
         }
@@ -479,11 +752,17 @@ if (skipDatesSet.has(day)) {
             const today = new Date();
             const months = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
             months.forEach((month, index) => allDOM.monthSelect.add(new Option(month, index)));
+            
+            // CORREÇÃO: Define os valores padrão ANTES de carregar do localStorage
             allDOM.monthSelect.value = today.getMonth();
             allDOM.yearInput.value = today.getFullYear();
-            renderCalendarGrid();
+
+            loadDataFromLocalStorage();
+            updatePersonnelList();
+            
             setupEventListeners();
-            updateContinuitySelector();
+            saveStateToHistory(); // Salva o estado inicial
+            renderCalendarGrid();
         }
 
         initialize();
