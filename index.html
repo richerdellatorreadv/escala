@@ -130,7 +130,7 @@
                 <select id="next-to-start-select"></select>
 
                 <label for="skip-dates-input">Pular dias (feriados):</label>
-                <input type="text" id="skip-dates-input" placeholder="Ex: 25/12, 01/01">
+                <input type="text" id="skip-dates-input" placeholder="Ex: 25, 1, 15">
             </div>
             <button id="generate-btn" class="btn-primary">Gerar / Refazer Escala</button>
         </div>
@@ -239,10 +239,20 @@
             allDOM.personInput.value = ''; allDOM.personInput.focus();
         }
 
-        function generateCalendar() {
+         function generateCalendar() {
             if (personnel.length === 0) return alert('Adicione ao menos um plantonista.');
             
             const month = parseInt(allDOM.monthSelect.value), year = parseInt(allDOM.yearInput.value);
+
+            // --- INÍCIO DO CÓDIGO A SER ADICIONADO ---
+            const skipDatesRaw = allDOM.skipDatesInput.value;
+const skipDatesSet = new Set(
+    skipDatesRaw.split(',')
+        .map(d => parseInt(d.trim(), 10)) // Converte cada parte para um número
+        .filter(day => !isNaN(day))       // Remove entradas que não são números válidos
+);
+            // --- FIM DO CÓDIGO A SER ADICIONADO ---
+
             const availablePersonnel = personnel.filter(p => !p.isUnavailableThisMonth);
             
             if (availablePersonnel.length === 0) {
@@ -267,9 +277,14 @@
             for (let day = 1; day <= daysInMonth; day++) {
                 const date = new Date(year, month, day);
                 const dayOfWeek = date.getDay();
-                if (dayOfWeek >= 1 && dayOfWeek <= 4) {
-                    shiftDays.push(day);
-                }
+                
+                // --- SUBSTITUA O BLOCO 'IF' ORIGINAL POR ESTE NOVO BLOCO ---
+                // Formata a data atual no formato "DD/MM" para comparar com a lista de feriados
+                if (dayOfWeek >= 1 && dayOfWeek <= 4 && !skipDatesSet.has(day)) {
+    shiftDays.push(day);
+}
+                // --- FIM DA SUBSTITUIÇÃO ---
+
             }
 
             shiftDays.forEach(day => {
@@ -288,7 +303,7 @@
             });
             
             if (lastAssignedPersonInLoop) lastOnShiftId = lastAssignedPersonInLoop.id;
-            renderCalendarGrid();
+            renderCalendarGrid(skipDatesSet);
             updateContinuitySelector();
         }
 
@@ -316,7 +331,7 @@
             return unavailableIds;
         }
 
-        function renderCalendarGrid() {
+        function renderCalendarGrid(skipDatesSet = new Set()) {
             allDOM.calendarBody.innerHTML = '';
             const month = parseInt(allDOM.monthSelect.value), year = parseInt(allDOM.yearInput.value);
             allDOM.calendarHeader.textContent = `${allDOM.monthSelect.options[month].text} de ${year}`;
@@ -328,15 +343,24 @@
                 dayCell.className = 'calendar-day';
                 const day = i - firstDayOfMonth + 1;
                 if (day > 0 && day <= daysInMonth) {
-                    dayCell.dataset.day = day;
-                    let contentHTML = `<div class="day-number">${day}</div><div class="day-content">`;
-                    const personId = currentAssignments[day];
-                    if (personId) {
-                        const person = personnel.find(p => p.id === personId);
-                        contentHTML += `<div class="shift-assignment">${person ? person.name : 'VAGO'}</div>`;
-                    }
-                    contentHTML += '</div>';
-                    dayCell.innerHTML = contentHTML;
+    dayCell.dataset.day = day;
+let contentHTML = `<div class="day-number">${day}</div><div class="day-content">`;
+
+// 1. Verifica se o DIA (número) está na lista de feriados
+if (skipDatesSet.has(day)) {
+        contentHTML += `<div class="shift-assignment" style="background-color: var(--secondary-color); color: var(--light-text-color); font-style: italic;">sem expediente</div>`;
+    
+    // 2. Se não for feriado, verifica se há um plantonista
+    } else {
+        const personId = currentAssignments[day];
+        if (personId) {
+            const person = personnel.find(p => p.id === personId);
+            contentHTML += `<div class="shift-assignment">${person ? person.name : 'VAGO'}</div>`;
+        }
+    }
+
+    contentHTML += '</div>';
+    dayCell.innerHTML = contentHTML;
                 } else {
                     dayCell.classList.add('other-month');
                 }
